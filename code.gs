@@ -26,7 +26,7 @@ function setupInputSheet() {
   
   // Set up the input table
   const headers = [
-    ['Position Settings'],
+    ['Position Settings', '', ''],
     ['Position', 'Starters', 'Bench (can use decimals)'],
     ['QB', 1, 1],
     ['RB', 2, 2.5],
@@ -36,11 +36,11 @@ function setupInputSheet() {
     ['SF', 1, 0],
     ['DST', 1, 0.5],
     ['K', 1, 0.5],
-    [''],
-    ['League Settings'],
-    ['Number of Teams', 12],
-    [''],
-    ['Results will appear below when you run Calculate VBD']
+    ['', '', ''],
+    ['League Settings', '', ''],
+    ['Number of Teams', 12, ''],
+    ['', '', ''],
+    ['Results will appear below when you run Calculate VBD', '', '']
   ];
   
   inputSheet.getRange(1, 1, headers.length, 3).setValues(headers);
