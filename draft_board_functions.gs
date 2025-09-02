@@ -60,6 +60,26 @@ function calculateRosterSizeFromInput() {
  * Analyzes the draft board to determine team count and roster size
  */
 function analyzeDraftBoard(draftSheet) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const helperSheet = ss.getSheetByName('Helper');
+  
+  // Get values from Helper tab if it exists
+  if (helperSheet) {
+    const rosterSize = helperSheet.getRange('B1').getValue();
+    const teamCount = helperSheet.getRange('B2').getValue();
+    const totalPlayers = helperSheet.getRange('B3').getValue();
+    
+    // Validate the values
+    if (rosterSize && teamCount && !isNaN(rosterSize) && !isNaN(teamCount)) {
+      return { 
+        teamCount: Number(teamCount), 
+        rosterSize: Number(rosterSize), 
+        totalPlayers: Number(totalPlayers) 
+      };
+    }
+  }
+  
+  // Fall back to original logic if Helper tab doesn't exist or has invalid values
   // Find the last column with data (team count)
   let lastCol = 2; // Start from column B
   const maxCol = draftSheet.getMaxColumns();
@@ -200,12 +220,6 @@ function setupTeamConfigSheet(sheet, teamCount) {
   for (let col = 1; col <= 4; col++) {
     sheet.autoResizeColumn(col);
   }
-  
-  // Add instructions
-  sheet.getRange(teamCount + 3, 1).setValue('Instructions:');
-  sheet.getRange(teamCount + 4, 1).setValue('1. Enter custom team names in column B');
-  sheet.getRange(teamCount + 5, 1).setValue('2. Check the "Controlled" box for teams you are managing');
-  sheet.getRange(teamCount + 6, 1).setValue('3. Team names will automatically appear in the Team Rosters sheet');
 }
 
 /**
@@ -314,9 +328,10 @@ function showHelp() {
   const helpText = `
 Draft Board Help:
 
-1. IMPORTANT: The number of rounds is now determined by the Input sheet (B3:B10).
-   - The total starter positions in the Input sheet determines how many rounds to draft
-   - Make sure to set up your league settings in the Input sheet first!
+1. IMPORTANT: Configure your league settings in the Helper tab first!
+   - Set Roster Size in cell B1 (default: 16)
+   - Set Teams in cell B2 (default: 12) 
+   - Total Players is automatically calculated in B3
 
 2. Set up your draft board in the 'draft' sheet:
    - Enter player names in columns B through Q (or less for fewer teams)
@@ -325,7 +340,7 @@ Draft Board Help:
 3. Run 'Setup Draft Board' from the Draft Board menu to:
    - Create 'Team Rosters' sheet with automatic player population
    - Create 'Team Config' sheet for team names and control settings
-   - The number of rounds will be based on your Input sheet settings
+   - The number of teams and rounds will be based on your Helper tab settings
 
 4. In 'Team Config' sheet:
    - Enter custom team names
@@ -336,7 +351,7 @@ Draft Board Help:
    - Display team names from config
    - Pull player names from the draft board
 
-6. Use 'Test Roster Size Calculation' to verify the number of rounds.
+6. Use 'Test Roster Size Calculation' to verify the configuration.
 7. Use 'Refresh Rosters' if you need to update formulas after changes.
   `;
   
@@ -344,17 +359,38 @@ Draft Board Help:
 }
 
 /**
- * Test function to verify roster size calculation from Input sheet
+ * Test function to verify roster size calculation from Helper tab
  */
 function testRosterSizeCalculation() {
   try {
-    const rosterSize = calculateRosterSizeFromInput();
-    SpreadsheetApp.getUi().alert(
-      'Roster Size Test',
-      `Calculated roster size from Input sheet (B3:B10): ${rosterSize} rounds\n\n` +
-      'This is based on the total number of starter positions.',
-      SpreadsheetApp.getUi().ButtonSet.OK
-    );
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const helperSheet = ss.getSheetByName('Helper');
+    
+    if (helperSheet) {
+      const rosterSize = helperSheet.getRange('B1').getValue();
+      const teamCount = helperSheet.getRange('B2').getValue();
+      const totalPlayers = helperSheet.getRange('B3').getValue();
+      
+      SpreadsheetApp.getUi().alert(
+        'Draft Configuration Test',
+        `Helper tab configuration:\n` +
+        `- Roster Size: ${rosterSize} rounds\n` +
+        `- Teams: ${teamCount}\n` +
+        `- Total Players: ${totalPlayers}\n\n` +
+        'These values will be used for the draft board setup.',
+        SpreadsheetApp.getUi().ButtonSet.OK
+      );
+    } else {
+      // Fall back to Input sheet calculation if Helper tab doesn't exist
+      const rosterSize = calculateRosterSizeFromInput();
+      SpreadsheetApp.getUi().alert(
+        'Roster Size Test',
+        `Calculated roster size from Input sheet (B3:B10): ${rosterSize} rounds\n\n` +
+        'This is based on the total number of starter positions.\n' +
+        'Consider setting up the Helper tab for easier configuration.',
+        SpreadsheetApp.getUi().ButtonSet.OK
+      );
+    }
   } catch (error) {
     SpreadsheetApp.getUi().alert('Error', error.toString(), SpreadsheetApp.getUi().ButtonSet.OK);
   }
