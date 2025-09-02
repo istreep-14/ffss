@@ -78,33 +78,15 @@ function setupHelperTab() {
     helperSheet = ss.insertSheet('Helper');
   }
   
-  // Clear existing content
-  helperSheet.clear();
-  
-  // Set up the configuration table
-  const config = [
-    ['Roster Size', 16],
-    ['Teams', 12],
-    ['Players', '=B1*B2']
-  ];
-  
-  // Set values
-  helperSheet.getRange(1, 1, config.length, 2).setValues(config);
-  
-  // Format headers
-  helperSheet.getRange('A1:A3').setFontWeight('bold');
-  
-  // Add formula for players calculation
+  // Just set the values without any formatting
+  helperSheet.getRange('A1').setValue('Roster Size');
+  helperSheet.getRange('B1').setValue(16);
+  helperSheet.getRange('A2').setValue('Teams');
+  helperSheet.getRange('B2').setValue(12);
+  helperSheet.getRange('A3').setValue('Players');
   helperSheet.getRange('B3').setFormula('=B1*B2');
   
-  // Set column widths
-  helperSheet.setColumnWidth(1, 120); // Label column
-  helperSheet.setColumnWidth(2, 80);  // Value column
-  
-  // Add border around the configuration area
-  helperSheet.getRange('A1:B3').setBorder(true, true, true, true, true, true);
-  
-  SpreadsheetApp.getUi().alert('Helper tab has been set up! Adjust roster size and teams as needed.');
+  SpreadsheetApp.getUi().alert('Helper tab has been created.');
 }
 
 function calculateVBD() {
