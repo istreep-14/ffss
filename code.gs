@@ -11,6 +11,7 @@ function onOpen() {
   ui.createMenu('Fantasy VBD')
     .addItem('Setup Input Sheet', 'setupInputSheet')
     .addItem('Calculate VBD', 'calculateVBD')
+    .addItem('Calculate VONA', 'showVONADialog')
     .addToUi();
     
   // Draft Board menu
@@ -575,4 +576,496 @@ function debugCalculations() {
   console.log('FLEX Allocation:', calculations.flexAllocation);
   console.log('Replacement Levels:', calculations.replacementLevels);
   console.log('Last Starter Levels:', calculations.lastStarterLevels);
+}
+
+/**
+ * Shows a dialog to input pick number for VONA calculation
+ */
+function showVONADialog() {
+  const ui = SpreadsheetApp.getUi();
+  
+  // Get current pick number from draft board if available
+  const defaultPick = getCurrentPickNumber();
+  
+  const result = ui.prompt(
+    'Calculate VONA (Value Over Next Available)',
+    'Enter the pick number to calculate VONA for:\n' +
+    '(This should be your next pick or any future pick)',
+    ui.ButtonSet.OK_CANCEL
+  );
+  
+  if (result.getSelectedButton() === ui.Button.OK) {
+    const pickNumber = parseInt(result.getResponseText());
+    
+    if (isNaN(pickNumber) || pickNumber < 1) {
+      ui.alert('Invalid pick number. Please enter a positive number.');
+      return;
+    }
+    
+    calculateVONA(pickNumber);
+  }
+}
+
+/**
+ * Gets the current pick number from draft board if available
+ */
+function getCurrentPickNumber() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const draftSheet = ss.getSheetByName('draft');
+  
+  if (!draftSheet) return 1;
+  
+  try {
+    const data = draftSheet.getDataRange().getValues();
+    let pickCount = 0;
+    
+    // Count non-empty cells in the draft board
+    for (let row = 1; row < data.length; row++) {
+      for (let col = 1; col < data[row].length; col++) {
+        if (data[row][col] && data[row][col].toString().trim()) {
+          pickCount++;
+        }
+      }
+    }
+    
+    return pickCount + 1;
+  } catch (e) {
+    return 1;
+  }
+}
+
+/**
+ * Main VONA calculation function
+ */
+function calculateVONA(pickNumber) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const playersSheet = ss.getSheetByName('Players');
+  const inputSheet = ss.getSheetByName('Input');
+  const draftSheet = ss.getSheetByName('draft');
+  
+  if (!playersSheet || !inputSheet) {
+    SpreadsheetApp.getUi().alert('Required sheets not found! Please ensure you have "Players" and "Input" sheets set up.');
+    return;
+  }
+  
+  try {
+    // Get all necessary data
+    const inputData = getInputData(inputSheet);
+    const playerData = getPlayerData(playersSheet);
+    const draftedPlayers = getDraftedPlayers(draftSheet);
+    
+    // Filter out drafted players
+    const availablePlayers = playerData.filter(player => 
+      !draftedPlayers.some(drafted => 
+        drafted.toLowerCase() === player.name.toLowerCase()
+      )
+    );
+    
+    // Calculate VONA for each available player
+    const vonaResults = calculateVONAForPlayers(
+      availablePlayers, 
+      pickNumber, 
+      inputData,
+      draftedPlayers.length
+    );
+    
+    // Display results
+    displayVONAResults(vonaResults, pickNumber);
+    
+  } catch (error) {
+    SpreadsheetApp.getUi().alert('Error calculating VONA: ' + error.message);
+    console.error(error);
+  }
+}
+
+/**
+ * Get list of drafted players from draft board
+ */
+function getDraftedPlayers(draftSheet) {
+  const draftedPlayers = [];
+  
+  if (!draftSheet) return draftedPlayers;
+  
+  const data = draftSheet.getDataRange().getValues();
+  
+  // Skip header row and collect all non-empty cells
+  for (let row = 1; row < data.length; row++) {
+    for (let col = 1; col < data[row].length; col++) {
+      const playerName = data[row][col];
+      if (playerName && playerName.toString().trim()) {
+        draftedPlayers.push(playerName.toString().trim());
+      }
+    }
+  }
+  
+  return draftedPlayers;
+}
+
+/**
+ * Calculate VONA for all available players
+ */
+function calculateVONAForPlayers(availablePlayers, targetPick, inputData, currentPick) {
+  const { numTeams } = inputData;
+  const picksUntilTarget = targetPick - currentPick - 1;
+  
+  // Group players by position
+  const playersByPosition = {};
+  availablePlayers.forEach(player => {
+    if (!playersByPosition[player.position]) {
+      playersByPosition[player.position] = [];
+    }
+    playersByPosition[player.position].push(player);
+  });
+  
+  // Sort each position by FPTS descending
+  Object.keys(playersByPosition).forEach(pos => {
+    playersByPosition[pos].sort((a, b) => b.fpts - a.fpts);
+  });
+  
+  // Calculate expected available value at target pick for each position
+  const expectedValueByPosition = {};
+  const positions = ['QB', 'RB', 'WR', 'TE', 'DST', 'K'];
+  
+  positions.forEach(pos => {
+    const posPlayers = playersByPosition[pos] || [];
+    
+    // Estimate how many players of this position will be drafted
+    const draftRate = getPositionDraftRate(pos, currentPick, numTeams);
+    const expectedDrafted = Math.floor(picksUntilTarget * draftRate);
+    
+    // Find the expected available player at target pick
+    const expectedIndex = Math.min(expectedDrafted, posPlayers.length - 1);
+    
+    if (expectedIndex >= 0 && expectedIndex < posPlayers.length) {
+      // Average the value around the expected index for more stability
+      const startIdx = Math.max(0, expectedIndex - 1);
+      const endIdx = Math.min(posPlayers.length - 1, expectedIndex + 1);
+      let totalValue = 0;
+      let count = 0;
+      
+      for (let i = startIdx; i <= endIdx; i++) {
+        totalValue += posPlayers[i].fpts;
+        count++;
+      }
+      
+      expectedValueByPosition[pos] = totalValue / count;
+    } else {
+      expectedValueByPosition[pos] = 0;
+    }
+  });
+  
+  // Calculate VONA for each player
+  const results = availablePlayers.map(player => {
+    const expectedValue = expectedValueByPosition[player.position] || 0;
+    const vona = player.fpts - expectedValue;
+    
+    return {
+      ...player,
+      vona: vona,
+      expectedValue: expectedValue,
+      positionScarcity: calculatePositionScarcity(
+        player.position, 
+        playersByPosition[player.position], 
+        picksUntilTarget
+      )
+    };
+  });
+  
+  // Sort by VONA descending
+  results.sort((a, b) => b.vona - a.vona);
+  
+  // Calculate position gaps (value of waiting)
+  const positionGaps = calculatePositionGaps(
+    playersByPosition, 
+    expectedValueByPosition,
+    picksUntilTarget
+  );
+  
+  return {
+    players: results,
+    expectedValues: expectedValueByPosition,
+    positionGaps: positionGaps
+  };
+}
+
+/**
+ * Estimate draft rate for each position based on historical data
+ */
+function getPositionDraftRate(position, currentPick, numTeams) {
+  // These are approximate draft rates based on typical fantasy drafts
+  // Can be adjusted based on league tendencies
+  const baseRates = {
+    'RB': 0.30,  // 30% of picks are RBs
+    'WR': 0.28,  // 28% of picks are WRs
+    'QB': 0.15,  // 15% of picks are QBs
+    'TE': 0.12,  // 12% of picks are TEs
+    'DST': 0.08, // 8% of picks are DSTs
+    'K': 0.07    // 7% of picks are Ks
+  };
+  
+  // Adjust rates based on draft stage
+  const round = Math.ceil(currentPick / numTeams);
+  let rate = baseRates[position] || 0.1;
+  
+  // Early rounds favor RB/WR
+  if (round <= 3) {
+    if (position === 'RB' || position === 'WR') {
+      rate *= 1.3;
+    } else if (position === 'K' || position === 'DST') {
+      rate *= 0.2;
+    }
+  }
+  // Middle rounds see more QBs and TEs
+  else if (round <= 8) {
+    if (position === 'QB' || position === 'TE') {
+      rate *= 1.2;
+    }
+  }
+  // Late rounds see more K/DST
+  else {
+    if (position === 'K' || position === 'DST') {
+      rate *= 1.5;
+    }
+  }
+  
+  return Math.min(rate, 1.0);
+}
+
+/**
+ * Calculate scarcity factor for a position
+ */
+function calculatePositionScarcity(position, positionPlayers, picksUntilTarget) {
+  if (!positionPlayers || positionPlayers.length === 0) return 0;
+  
+  // Calculate the drop-off in value
+  const topTier = positionPlayers.slice(0, 3).reduce((sum, p) => sum + p.fpts, 0) / Math.min(3, positionPlayers.length);
+  const nextTier = positionPlayers.slice(3, 8).reduce((sum, p) => sum + p.fpts, 0) / Math.min(5, positionPlayers.length - 3);
+  
+  const dropOff = topTier - nextTier;
+  const playersRemaining = positionPlayers.length;
+  
+  // Higher scarcity if big drop-off and few players remaining
+  const scarcity = (dropOff / topTier) * (10 / (playersRemaining + 10));
+  
+  return scarcity;
+}
+
+/**
+ * Calculate the value gap for waiting on each position
+ */
+function calculatePositionGaps(playersByPosition, expectedValues, picksUntilTarget) {
+  const gaps = {};
+  
+  Object.keys(playersByPosition).forEach(pos => {
+    const players = playersByPosition[pos] || [];
+    if (players.length === 0) {
+      gaps[pos] = { gap: 0, recommendation: 'No players available' };
+      return;
+    }
+    
+    // Current best available
+    const currentBest = players[0].fpts;
+    const expectedValue = expectedValues[pos] || 0;
+    const gap = currentBest - expectedValue;
+    
+    // Calculate tier breaks
+    let tierBreak = 'Gradual decline';
+    if (players.length >= 3) {
+      const top3Avg = players.slice(0, 3).reduce((sum, p) => sum + p.fpts, 0) / 3;
+      const next3Avg = players.slice(3, 6).reduce((sum, p) => sum + p.fpts, 0) / Math.min(3, players.length - 3);
+      const tierDrop = ((top3Avg - next3Avg) / top3Avg) * 100;
+      
+      if (tierDrop > 15) {
+        tierBreak = 'Major tier drop';
+      } else if (tierDrop > 8) {
+        tierBreak = 'Moderate tier drop';
+      }
+    }
+    
+    // Generate recommendation
+    let recommendation;
+    if (gap > 20) {
+      recommendation = 'PRIORITY - Significant value loss if you wait';
+    } else if (gap > 10) {
+      recommendation = 'Consider drafting - Notable value loss expected';
+    } else if (gap > 5) {
+      recommendation = 'Can wait - Minimal value loss';
+    } else {
+      recommendation = 'Safe to wait - Plenty of value remaining';
+    }
+    
+    gaps[pos] = {
+      gap: gap,
+      currentBest: currentBest,
+      expectedAtPick: expectedValue,
+      tierBreak: tierBreak,
+      recommendation: recommendation,
+      playersRemaining: players.length
+    };
+  });
+  
+  return gaps;
+}
+
+/**
+ * Display VONA results in a new sheet
+ */
+function displayVONAResults(results, pickNumber) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // Create or get VONA sheet
+  let vonaSheet = ss.getSheetByName('VONA Analysis');
+  if (!vonaSheet) {
+    vonaSheet = ss.insertSheet('VONA Analysis');
+  } else {
+    vonaSheet.clear();
+  }
+  
+  // Set up headers
+  const headers = [
+    ['VONA Analysis for Pick #' + pickNumber, '', '', '', '', '', ''],
+    ['Generated: ' + new Date().toLocaleString(), '', '', '', '', '', ''],
+    ['', '', '', '', '', '', ''],
+    ['Top Players by VONA', '', '', '', '', '', ''],
+    ['Rank', 'Name', 'Team', 'Pos', 'FPTS', 'Expected at Pick', 'VONA']
+  ];
+  
+  vonaSheet.getRange(1, 1, headers.length, headers[0].length).setValues(headers);
+  
+  // Format headers
+  vonaSheet.getRange(1, 1, 1, 7).merge().setFontSize(16).setFontWeight('bold');
+  vonaSheet.getRange(2, 1, 1, 7).merge().setFontStyle('italic');
+  vonaSheet.getRange(4, 1, 1, 7).merge().setFontSize(14).setFontWeight('bold');
+  vonaSheet.getRange(5, 1, 1, 7).setFontWeight('bold').setBackground('#f0f0f0');
+  
+  // Add top 30 players by VONA
+  const topPlayers = results.players.slice(0, 30);
+  const playerData = topPlayers.map((player, index) => [
+    index + 1,
+    player.name,
+    player.team || '',
+    player.position,
+    player.fpts.toFixed(1),
+    player.expectedValue.toFixed(1),
+    player.vona.toFixed(1)
+  ]);
+  
+  if (playerData.length > 0) {
+    vonaSheet.getRange(6, 1, playerData.length, 7).setValues(playerData);
+  }
+  
+  // Add position analysis section
+  const positionRow = 6 + Math.max(playerData.length, 1) + 2;
+  const positionHeaders = [
+    ['Position Analysis - Value of Waiting', '', '', '', '', '', ''],
+    ['Position', 'Current Best', 'Expected at Pick', 'Value Gap', 'Tier Status', 'Players Left', 'Recommendation']
+  ];
+  
+  vonaSheet.getRange(positionRow, 1, positionHeaders.length, positionHeaders[0].length).setValues(positionHeaders);
+  vonaSheet.getRange(positionRow, 1, 1, 7).merge().setFontSize(14).setFontWeight('bold');
+  vonaSheet.getRange(positionRow + 1, 1, 1, 7).setFontWeight('bold').setBackground('#f0f0f0');
+  
+  // Add position data
+  const positions = ['QB', 'RB', 'WR', 'TE', 'DST', 'K'];
+  const positionData = positions.map(pos => {
+    const gap = results.positionGaps[pos];
+    if (!gap) {
+      return [pos, 'N/A', 'N/A', 'N/A', 'N/A', 0, 'No data'];
+    }
+    return [
+      pos,
+      gap.currentBest.toFixed(1),
+      gap.expectedAtPick.toFixed(1),
+      gap.gap.toFixed(1),
+      gap.tierBreak,
+      gap.playersRemaining,
+      gap.recommendation
+    ];
+  });
+  
+  vonaSheet.getRange(positionRow + 2, 1, positionData.length, 7).setValues(positionData);
+  
+  // Color code recommendations
+  const recommendationRange = vonaSheet.getRange(positionRow + 2, 7, positionData.length, 1);
+  for (let i = 0; i < positionData.length; i++) {
+    const cell = recommendationRange.getCell(i + 1, 1);
+    const recommendation = positionData[i][6];
+    
+    if (recommendation.includes('PRIORITY')) {
+      cell.setBackground('#ffcccc').setFontWeight('bold');
+    } else if (recommendation.includes('Consider')) {
+      cell.setBackground('#ffe6cc');
+    } else if (recommendation.includes('Can wait')) {
+      cell.setBackground('#ffffcc');
+    } else if (recommendation.includes('Safe')) {
+      cell.setBackground('#ccffcc');
+    }
+  }
+  
+  // Add key insights
+  const insightsRow = positionRow + 2 + positions.length + 2;
+  const insights = generateVONAInsights(results, pickNumber);
+  
+  vonaSheet.getRange(insightsRow, 1).setValue('Key Insights').setFontSize(14).setFontWeight('bold');
+  vonaSheet.getRange(insightsRow + 1, 1, insights.length, 1).setValues(insights.map(i => [i]));
+  
+  // Format columns
+  vonaSheet.setColumnWidth(1, 60);
+  vonaSheet.setColumnWidth(2, 180);
+  vonaSheet.setColumnWidth(3, 60);
+  vonaSheet.setColumnWidth(4, 60);
+  vonaSheet.setColumnWidth(5, 80);
+  vonaSheet.setColumnWidth(6, 120);
+  vonaSheet.setColumnWidth(7, 200);
+  
+  // Apply borders
+  const lastRow = vonaSheet.getLastRow();
+  vonaSheet.getRange(1, 1, lastRow, 7).setBorder(true, true, true, true, true, true);
+  
+  SpreadsheetApp.getUi().alert(
+    'VONA analysis complete!\n' +
+    'Check the "VONA Analysis" sheet for detailed results.\n' +
+    'The analysis shows which positions you should prioritize based on expected value decline.'
+  );
+}
+
+/**
+ * Generate key insights from VONA analysis
+ */
+function generateVONAInsights(results, pickNumber) {
+  const insights = [];
+  
+  // Find positions with biggest gaps
+  const sortedGaps = Object.entries(results.positionGaps)
+    .filter(([pos, gap]) => gap.gap !== undefined)
+    .sort((a, b) => b[1].gap - a[1].gap);
+  
+  if (sortedGaps.length > 0) {
+    const [topPos, topGap] = sortedGaps[0];
+    insights.push(`• ${topPos} has the highest value gap (${topGap.gap.toFixed(1)} points) - consider prioritizing`);
+  }
+  
+  // Find scarce positions
+  sortedGaps.forEach(([pos, gap]) => {
+    if (gap.playersRemaining < 10 && gap.gap > 5) {
+      insights.push(`• ${pos} position is becoming scarce with only ${gap.playersRemaining} quality players remaining`);
+    }
+  });
+  
+  // Best overall VONA players
+  const topVONA = results.players.slice(0, 3);
+  if (topVONA.length > 0) {
+    insights.push(`• Top VONA players: ${topVONA.map(p => `${p.name} (${p.vona.toFixed(1)})`).join(', ')}`);
+  }
+  
+  // Positions safe to wait on
+  const safePositions = sortedGaps
+    .filter(([pos, gap]) => gap.gap < 5 && gap.playersRemaining > 15)
+    .map(([pos]) => pos);
+  
+  if (safePositions.length > 0) {
+    insights.push(`• Safe to wait on: ${safePositions.join(', ')} - minimal value loss expected`);
+  }
+  
+  return insights;
 }
