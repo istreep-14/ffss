@@ -15,6 +15,7 @@ function onOpen() {
     
   // Draft Board menu
   ui.createMenu('Draft Board')
+    .addItem('Setup Helper Tab', 'setupHelperTab')
     .addItem('Setup Draft Board', 'setupDraftBoard')
     .addItem('Refresh Rosters', 'refreshRosters')
     .addSeparator()
@@ -66,6 +67,44 @@ function setupInputSheet() {
   inputSheet.setColumnWidth(3, 180); // Bench column
   
   SpreadsheetApp.getUi().alert('Input sheet has been set up! You can use decimals for bench (e.g., 2.5 RBs). Adjust settings as needed, then run "Calculate VBD".');
+}
+
+function setupHelperTab() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // Create or get the Helper sheet
+  let helperSheet = ss.getSheetByName('Helper');
+  if (!helperSheet) {
+    helperSheet = ss.insertSheet('Helper');
+  }
+  
+  // Clear existing content
+  helperSheet.clear();
+  
+  // Set up the configuration table
+  const config = [
+    ['Roster Size', 16],
+    ['Teams', 12],
+    ['Players', '=B1*B2']
+  ];
+  
+  // Set values
+  helperSheet.getRange(1, 1, config.length, 2).setValues(config);
+  
+  // Format headers
+  helperSheet.getRange('A1:A3').setFontWeight('bold');
+  
+  // Add formula for players calculation
+  helperSheet.getRange('B3').setFormula('=B1*B2');
+  
+  // Set column widths
+  helperSheet.setColumnWidth(1, 120); // Label column
+  helperSheet.setColumnWidth(2, 80);  // Value column
+  
+  // Add border around the configuration area
+  helperSheet.getRange('A1:B3').setBorder(true, true, true, true, true, true);
+  
+  SpreadsheetApp.getUi().alert('Helper tab has been set up! Adjust roster size and teams as needed.');
 }
 
 function calculateVBD() {
