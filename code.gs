@@ -669,6 +669,19 @@ function calculateVONA(pickNumber) {
       draftedPlayers.length
     );
     
+    // Debug logging
+    console.log('VONA Calculation Debug:', {
+      targetPick: pickNumber,
+      currentPick: draftedPlayers.length,
+      picksUntilTarget: pickNumber - draftedPlayers.length - 1,
+      expectedValues: vonaResults.expectedValues,
+      topPlayersByPosition: Object.keys(vonaResults.expectedValues).reduce((acc, pos) => {
+        const players = availablePlayers.filter(p => p.position === pos).slice(0, 3);
+        acc[pos] = players.map(p => ({ name: p.name, fpts: p.fpts }));
+        return acc;
+      }, {})
+    });
+    
     // Display results
     displayVONAResults(vonaResults, pickNumber);
     
@@ -706,7 +719,12 @@ function getDraftedPlayers(draftSheet) {
  */
 function calculateVONAForPlayers(availablePlayers, targetPick, inputData, currentPick) {
   const { numTeams } = inputData;
-  const picksUntilTarget = targetPick - currentPick - 1;
+  // For immediate pick analysis, use 1 pick ahead
+  let picksUntilTarget = targetPick - currentPick - 1;
+  if (picksUntilTarget <= 0) {
+    // If analyzing current pick or past pick, look at next pick value
+    picksUntilTarget = 1;
+  }
   
   // Group players by position
   const playersByPosition = {};
@@ -729,28 +747,87 @@ function calculateVONAForPlayers(availablePlayers, targetPick, inputData, curren
   positions.forEach(pos => {
     const posPlayers = playersByPosition[pos] || [];
     
+    if (posPlayers.length === 0) {
+      expectedValueByPosition[pos] = 0;
+      return;
+    }
+    
     // Estimate how many players of this position will be drafted
     const draftRate = getPositionDraftRate(pos, currentPick, numTeams);
-    const expectedDrafted = Math.floor(picksUntilTarget * draftRate);
+    const expectedDrafted = Math.ceil(picksUntilTarget * draftRate);
     
-    // Find the expected available player at target pick
-    const expectedIndex = Math.min(expectedDrafted, posPlayers.length - 1);
+    // Calculate expected index based on:
+    // 1. How many players will be drafted before our pick
+    // 2. Current ADP/ranking trends 
+    // 3. Position scarcity
+    // 4. Tier breaks and value cliffs
+    let expectedIndex = expectedDrafted;
     
-    if (expectedIndex >= 0 && expectedIndex < posPlayers.length) {
-      // Average the value around the expected index for more stability
-      const startIdx = Math.max(0, expectedIndex - 1);
-      const endIdx = Math.min(posPlayers.length - 1, expectedIndex + 1);
+    // Adjust for position value and typical draft patterns
+    const round = Math.ceil((currentPick + 1) / numTeams);
+    
+    // Apply position-specific adjustments based on VBD+ principles
+    if (pos === 'RB') {
+      // RBs have steep drop-offs, tend to go faster than expected
+      if (round <= 3) {
+        expectedIndex = Math.ceil(expectedIndex * 1.3);
+      } else {
+        expectedIndex = Math.ceil(expectedIndex * 1.15);
+      }
+    } else if (pos === 'WR') {
+      // WRs have more depth but elite ones go fast
+      if (round <= 2) {
+        expectedIndex = Math.ceil(expectedIndex * 1.25);
+      } else {
+        expectedIndex = Math.ceil(expectedIndex * 1.1);
+      }
+    } else if (pos === 'QB') {
+      // QBs often go in runs after the elite tier
+      if (round >= 4 && round <= 7) {
+        expectedIndex = Math.ceil(expectedIndex * 1.25); // QB run rounds
+      } else {
+        expectedIndex = Math.ceil(expectedIndex * 1.1);
+      }
+    } else if (pos === 'TE') {
+      // TEs have huge tier breaks
+      if (posPlayers.length > 0 && posPlayers[0].fpts > 200) {
+        // Elite TE available
+        expectedIndex = Math.max(1, expectedIndex); // Won't last
+      } else {
+        expectedIndex = Math.ceil(expectedIndex * 1.1);
+      }
+    }
+    
+    // Account for position scarcity
+    const scarcityMultiplier = 1 + (0.2 * (1 - (posPlayers.length / 50)));
+    expectedIndex = Math.ceil(expectedIndex * scarcityMultiplier);
+    
+    // Ensure we don't go out of bounds
+    expectedIndex = Math.min(expectedIndex, posPlayers.length - 1);
+    expectedIndex = Math.max(0, expectedIndex);
+    
+    if (posPlayers.length > expectedIndex) {
+      // Calculate a weighted average around the expected index
+      // This gives us a more realistic expectation
       let totalValue = 0;
-      let count = 0;
+      let totalWeight = 0;
       
-      for (let i = startIdx; i <= endIdx; i++) {
-        totalValue += posPlayers[i].fpts;
-        count++;
+      // Look at players around the expected index with decreasing weights
+      const range = Math.min(3, Math.floor(posPlayers.length / 4));
+      for (let i = Math.max(0, expectedIndex - range); 
+           i <= Math.min(posPlayers.length - 1, expectedIndex + range); 
+           i++) {
+        // Weight closer players more heavily
+        const distance = Math.abs(i - expectedIndex);
+        const weight = 1 / (1 + distance * 0.5);
+        totalValue += posPlayers[i].fpts * weight;
+        totalWeight += weight;
       }
       
-      expectedValueByPosition[pos] = totalValue / count;
+      expectedValueByPosition[pos] = totalWeight > 0 ? totalValue / totalWeight : posPlayers[expectedIndex].fpts;
     } else {
-      expectedValueByPosition[pos] = 0;
+      // If we expect all players to be gone, use the last player's value
+      expectedValueByPosition[pos] = posPlayers[posPlayers.length - 1].fpts;
     }
   });
   
@@ -789,11 +866,10 @@ function calculateVONAForPlayers(availablePlayers, targetPick, inputData, curren
 }
 
 /**
- * Estimate draft rate for each position based on historical data
+ * Estimate draft rate for each position based on historical data and VBD principles
  */
 function getPositionDraftRate(position, currentPick, numTeams) {
-  // These are approximate draft rates based on typical fantasy drafts
-  // Can be adjusted based on league tendencies
+  // Base rates derived from typical fantasy draft patterns and VBD analysis
   const baseRates = {
     'RB': 0.30,  // 30% of picks are RBs
     'WR': 0.28,  // 28% of picks are WRs
@@ -803,32 +879,105 @@ function getPositionDraftRate(position, currentPick, numTeams) {
     'K': 0.07    // 7% of picks are Ks
   };
   
-  // Adjust rates based on draft stage
-  const round = Math.ceil(currentPick / numTeams);
+  // Calculate current round and pick within round
+  const round = Math.ceil((currentPick + 1) / numTeams);
+  const pickInRound = ((currentPick) % numTeams) + 1;
   let rate = baseRates[position] || 0.1;
   
-  // Early rounds favor RB/WR
-  if (round <= 3) {
-    if (position === 'RB' || position === 'WR') {
-      rate *= 1.3;
-    } else if (position === 'K' || position === 'DST') {
-      rate *= 0.2;
+  // Implement VBD+ logic: position value changes throughout draft
+  if (round <= 2) {
+    // First 2 rounds: Elite RB/WR heavy
+    if (position === 'RB') {
+      rate = 0.45;  // 45% RBs
+    } else if (position === 'WR') {
+      rate = 0.40;  // 40% WRs
+    } else if (position === 'TE') {
+      rate = 0.10;  // 10% elite TEs
+    } else if (position === 'QB') {
+      rate = 0.05;  // 5% elite QBs
+    } else {
+      rate = 0.0;   // No K/DST
     }
-  }
-  // Middle rounds see more QBs and TEs
-  else if (round <= 8) {
-    if (position === 'QB' || position === 'TE') {
-      rate *= 1.2;
+  } else if (round <= 4) {
+    // Rounds 3-4: Still RB/WR heavy but more diverse
+    if (position === 'RB') {
+      rate = 0.35;
+    } else if (position === 'WR') {
+      rate = 0.35;
+    } else if (position === 'QB') {
+      rate = 0.15;  // QB runs often start
+    } else if (position === 'TE') {
+      rate = 0.15;
+    } else {
+      rate = 0.0;
     }
-  }
-  // Late rounds see more K/DST
-  else {
-    if (position === 'K' || position === 'DST') {
-      rate *= 1.5;
+  } else if (round <= 6) {
+    // Rounds 5-6: Position runs common
+    if (position === 'RB') {
+      rate = 0.25;
+    } else if (position === 'WR') {
+      rate = 0.30;
+    } else if (position === 'QB') {
+      rate = 0.25;  // Heavy QB drafting
+    } else if (position === 'TE') {
+      rate = 0.20;
+    } else {
+      rate = 0.0;
+    }
+  } else if (round <= 10) {
+    // Rounds 7-10: Filling out starters
+    if (position === 'RB') {
+      rate = 0.20;
+    } else if (position === 'WR') {
+      rate = 0.25;
+    } else if (position === 'QB') {
+      rate = 0.20;
+    } else if (position === 'TE') {
+      rate = 0.15;
+    } else if (position === 'DST') {
+      rate = 0.10;
+    } else if (position === 'K') {
+      rate = 0.10;
+    }
+  } else if (round <= 14) {
+    // Rounds 11-14: Bench depth and DST/K
+    if (position === 'RB') {
+      rate = 0.20;
+    } else if (position === 'WR') {
+      rate = 0.20;
+    } else if (position === 'QB') {
+      rate = 0.10;
+    } else if (position === 'TE') {
+      rate = 0.10;
+    } else if (position === 'DST') {
+      rate = 0.20;
+    } else if (position === 'K') {
+      rate = 0.20;
+    }
+  } else {
+    // Late rounds: Fliers and handcuffs
+    if (position === 'RB') {
+      rate = 0.30;  // Handcuffs
+    } else if (position === 'WR') {
+      rate = 0.30;  // Sleepers
+    } else if (position === 'QB') {
+      rate = 0.05;
+    } else if (position === 'TE') {
+      rate = 0.05;
+    } else if (position === 'DST') {
+      rate = 0.15;
+    } else if (position === 'K') {
+      rate = 0.15;
     }
   }
   
-  return Math.min(rate, 1.0);
+  // Adjust for position runs (if early in round, runs more likely)
+  if (pickInRound <= numTeams / 3) {
+    // Early in round, position runs more common
+    rate *= 1.15;
+  }
+  
+  return Math.min(rate, 0.9); // Cap at 90% to ensure some diversity
 }
 
 /**
@@ -946,7 +1095,7 @@ function displayVONAResults(results, pickNumber) {
     player.team || '',
     player.position,
     player.fpts.toFixed(1),
-    player.expectedValue.toFixed(1),
+    player.expectedValue && player.expectedValue > 0 ? player.expectedValue.toFixed(1) : '0.0',
     player.vona.toFixed(1)
   ]);
   
