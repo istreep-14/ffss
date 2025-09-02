@@ -1,0 +1,99 @@
+EXCEL FANTASY DRAFT SHEET FORMULAS
+=====================================
+
+SHEET STRUCTURE:
+- Sheet1 "Draft Board": Main roster display
+- Sheet2 "Draft Picks": Pick entry sheet
+
+DRAFT BOARD SETUP (Sheet1):
+Row 1: Position | Team 1 | Team 2 | Team 3 | ... (team names)
+Column A: QB, RB, RB, WR, WR, TE, FLEX, SUPERFLEX, BN1, BN2, BN3...
+
+DRAFT PICKS SETUP (Sheet2):
+Headers: Pick # | Round | Team | Player | Position
+
+=====================================
+MAIN ROSTER FORMULA (For cell B2 and drag down/across):
+=====================================
+
+For Regular Positions (QB, RB, WR, TE) - Use in rows 2-7:
+=IFERROR(INDEX('Draft Picks'!$D:$D,SMALL(IF(('Draft Picks'!$C:$C=B$1)*('Draft Picks'!$E:$E=$A2),ROW('Draft Picks'!$D:$D)),COUNTIF(B$2:B2,$A2)+1)),"")
+
+For FLEX Position (row 8):
+=IFERROR(
+  IF(COUNTIFS('Draft Picks'!$C:$C,B$1,'Draft Picks'!$E:$E,"RB")>COUNTIF($A$2:$A$8,"RB"),
+    INDEX('Draft Picks'!$D:$D,SMALL(IF(('Draft Picks'!$C:$C=B$1)*('Draft Picks'!$E:$E="RB"),ROW('Draft Picks'!$D:$D)),COUNTIF($A$2:$A$8,"RB")+1)),
+    IF(COUNTIFS('Draft Picks'!$C:$C,B$1,'Draft Picks'!$E:$E,"WR")>COUNTIF($A$2:$A$8,"WR"),
+      INDEX('Draft Picks'!$D:$D,SMALL(IF(('Draft Picks'!$C:$C=B$1)*('Draft Picks'!$E:$E="WR"),ROW('Draft Picks'!$D:$D)),COUNTIF($A$2:$A$8,"WR")+1)),
+      IF(COUNTIFS('Draft Picks'!$C:$C,B$1,'Draft Picks'!$E:$E,"TE")>COUNTIF($A$2:$A$8,"TE"),
+        INDEX('Draft Picks'!$D:$D,SMALL(IF(('Draft Picks'!$C:$C=B$1)*('Draft Picks'!$E:$E="TE"),ROW('Draft Picks'!$D:$D)),COUNTIF($A$2:$A$8,"TE")+1)),
+        ""))),"")
+
+For SUPERFLEX Position (row 9):
+=IFERROR(
+  IF(COUNTIFS('Draft Picks'!$C:$C,B$1,'Draft Picks'!$E:$E,"QB")>COUNTIF($A$2:$A$9,"QB"),
+    INDEX('Draft Picks'!$D:$D,SMALL(IF(('Draft Picks'!$C:$C=B$1)*('Draft Picks'!$E:$E="QB"),ROW('Draft Picks'!$D:$D)),COUNTIF($A$2:$A$9,"QB")+1)),
+    IF(COUNTIFS('Draft Picks'!$C:$C,B$1,'Draft Picks'!$E:$E,"RB")>COUNTIF($A$2:$A$9,"RB")+IF(B8<>"",COUNTIF('Draft Picks'!$E:$E,VLOOKUP(B8,'Draft Picks'!$D:$E,2,0)),0),
+      INDEX('Draft Picks'!$D:$D,SMALL(IF(('Draft Picks'!$C:$C=B$1)*('Draft Picks'!$E:$E="RB"),ROW('Draft Picks'!$D:$D)),COUNTIF($A$2:$A$9,"RB")+IF(B8<>"",COUNTIF('Draft Picks'!$E:$E,VLOOKUP(B8,'Draft Picks'!$D:$E,2,0)),0)+1)),
+      IF(COUNTIFS('Draft Picks'!$C:$C,B$1,'Draft Picks'!$E:$E,"WR")>COUNTIF($A$2:$A$9,"WR")+IF(B8<>"",COUNTIF('Draft Picks'!$E:$E,VLOOKUP(B8,'Draft Picks'!$D:$E,2,0)),0),
+        INDEX('Draft Picks'!$D:$D,SMALL(IF(('Draft Picks'!$C:$C=B$1)*('Draft Picks'!$E:$E="WR"),ROW('Draft Picks'!$D:$D)),COUNTIF($A$2:$A$9,"WR")+IF(B8<>"",COUNTIF('Draft Picks'!$E:$E,VLOOKUP(B8,'Draft Picks'!$D:$E,2,0)),0)+1)),
+        IF(COUNTIFS('Draft Picks'!$C:$C,B$1,'Draft Picks'!$E:$E,"TE")>COUNTIF($A$2:$A$9,"TE")+IF(B8<>"",COUNTIF('Draft Picks'!$E:$E,VLOOKUP(B8,'Draft Picks'!$D:$E,2,0)),0),
+          INDEX('Draft Picks'!$D:$D,SMALL(IF(('Draft Picks'!$C:$C=B$1)*('Draft Picks'!$E:$E="TE"),ROW('Draft Picks'!$D:$D)),COUNTIF($A$2:$A$9,"TE")+IF(B8<>"",COUNTIF('Draft Picks'!$E:$E,VLOOKUP(B8,'Draft Picks'!$D:$E,2,0)),0)+1)),
+          "")))),"")
+
+For BENCH Positions (rows 11+):
+=IFERROR(INDEX('Draft Picks'!$D:$D,SMALL(IF(('Draft Picks'!$C:$C=B$1)*(COUNTIF(B$2:B$10,'Draft Picks'!$D:$D)=0),ROW('Draft Picks'!$D:$D)),ROW()-10)),"")
+
+=====================================
+POSITION COUNTER FORMULAS:
+=====================================
+
+Create a summary section below your roster (e.g., starting at row 20):
+
+QB Count: =COUNTIFS('Draft Picks'!$C:$C,B$1,'Draft Picks'!$E:$E,"QB")
+RB Count: =COUNTIFS('Draft Picks'!$C:$C,B$1,'Draft Picks'!$E:$E,"RB")
+WR Count: =COUNTIFS('Draft Picks'!$C:$C,B$1,'Draft Picks'!$E:$E,"WR")
+TE Count: =COUNTIFS('Draft Picks'!$C:$C,B$1,'Draft Picks'!$E:$E,"TE")
+Total: =COUNTIF('Draft Picks'!$C:$C,B$1)
+
+=====================================
+HELPER FORMULAS:
+=====================================
+
+Remaining Salary Cap (if tracking):
+=100-SUMIF('Draft Picks'!$C:$C,B$1,'Draft Picks'!$F:$F)
+
+Position Needs (shows what positions still need to be filled):
+For QB: =MAX(0,COUNTIF($A$2:$A$9,"QB")-COUNTIFS('Draft Picks'!$C:$C,B$1,'Draft Picks'!$E:$E,"QB"))
+
+=====================================
+EXCEL TIPS:
+=====================================
+
+1. These are ARRAY FORMULAS in older Excel versions:
+   - After typing the formula, press Ctrl+Shift+Enter instead of just Enter
+   - You'll see curly braces {} around the formula
+
+2. In Excel 365/2021:
+   - These formulas work with just Enter (dynamic arrays)
+
+3. For better performance with large drafts:
+   - Limit the range instead of using entire columns (e.g., $D$2:$D$300 instead of $D:$D)
+
+4. Conditional Formatting suggestions:
+   - Highlight filled positions: Format cells that are not blank
+   - Color-code by position: Use different colors for QB, RB, WR, TE
+   - Highlight bench players: Different shade for rows 11+
+
+5. Data Validation for Draft Picks sheet:
+   - Position column: Create dropdown with QB, RB, WR, TE
+   - Team column: Create dropdown with team names
+
+=====================================
+ALTERNATIVE SIMPLIFIED FORMULAS (if array formulas don't work):
+=====================================
+
+For regular positions (less elegant but works everywhere):
+=IF(COUNTIFS('Draft Picks'!$C:$C,B$1,'Draft Picks'!$E:$E,$A2)>=COUNTIF(B$2:B2,$A2)+1,
+    INDEX('Draft Picks'!$D:$D,MATCH(1,('Draft Picks'!$C:$C=B$1)*('Draft Picks'!$E:$E=$A2),0)+COUNTIF(B$2:B2,$A2)),
+    "")

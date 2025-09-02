@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fantasy Football Draft Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .instructions {
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .formula-section {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+        }
+        .formula-title {
+            font-weight: bold;
+            color: #1976d2;
+            margin-bottom: 5px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #2196F3;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        .position-header {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .code {
+            background-color: #f5f5f5;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Fantasy Football Draft Tracker - Setup Guide</h1>
+        
+        <div class="instructions">
+            <h2>Overview</h2>
+            <p>This guide will help you create a Google Sheets fantasy draft tracker that automatically:</p>
+            <ul>
+                <li>Organizes teams across columns with team names in row 1</li>
+                <li>Lists required positions down column A in your specified order</li>
+                <li>Tracks drafted players and automatically assigns them to appropriate roster spots</li>
+                <li>Fills starters first (natural position → superflex → flex), then bench spots</li>
+                <li>Provides position counts and draft analysis</li>
+            </ul>
+        </div>
+
+        <h2>Sheet Structure</h2>
+        
+        <h3>1. Main Draft Sheet (Sheet1)</h3>
+        <table>
+            <tr>
+                <th>A</th>
+                <th>B</th>
+                <th>C</th>
+                <th>D</th>
+                <th>E</th>
+                <th>...</th>
+            </tr>
+            <tr>
+                <td>Position</td>
+                <td>Team 1</td>
+                <td>Team 2</td>
+                <td>Team 3</td>
+                <td>Team 4</td>
+                <td>...</td>
+            </tr>
+            <tr>
+                <td>QB</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>...</td>
+            </tr>
+            <tr>
+                <td>RB</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>...</td>
+            </tr>
+            <tr>
+                <td>RB</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>...</td>
+            </tr>
+            <tr>
+                <td>WR</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>...</td>
+            </tr>
+            <tr>
+                <td>WR</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>...</td>
+            </tr>
+            <tr>
+                <td>TE</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>...</td>
+            </tr>
+            <tr>
+                <td>FLEX</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>...</td>
+            </tr>
+            <tr>
+                <td>SUPERFLEX</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>...</td>
+            </tr>
+            <tr class="position-header">
+                <td>BENCH</td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td>...</td>
+            </tr>
+            <tr>
+                <td>BN1</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>...</td>
+            </tr>
+            <tr>
+                <td>BN2</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>[Formula]</td>
+                <td>...</td>
+            </tr>
+        </table>
+
+        <h3>2. Draft Picks Sheet (Sheet2)</h3>
+        <table>
+            <tr>
+                <th>A</th>
+                <th>B</th>
+                <th>C</th>
+                <th>D</th>
+                <th>E</th>
+            </tr>
+            <tr>
+                <td>Pick #</td>
+                <td>Round</td>
+                <td>Team</td>
+                <td>Player</td>
+                <td>Position</td>
+            </tr>
+            <tr>
+                <td>1</td>
+                <td>1</td>
+                <td>Team 1</td>
+                <td>Patrick Mahomes</td>
+                <td>QB</td>
+            </tr>
+            <tr>
+                <td>2</td>
+                <td>1</td>
+                <td>Team 2</td>
+                <td>Christian McCaffrey</td>
+                <td>RB</td>
+            </tr>
+        </table>
+
+        <h2>Key Formulas</h2>
+
+        <div class="formula-section">
+            <div class="formula-title">Position Requirements Setup (Column A)</div>
+            <p>In A2 and down, manually enter your position sequence:</p>
+            <code>QB, RB, RB, WR, WR, TE, FLEX, SUPERFLEX, BN1, BN2, BN3...</code>
+        </div>
+
+        <div class="formula-section">
+            <div class="formula-title">Main Roster Formula (for each team column, starting at B2)</div>
+            <p>This master formula handles all the auto-fill logic:</p>
+            <code>=IF(ROW()<=9,
+  IF($A2="QB",
+    IF(COUNTIF(B$2:B2,$A2)<COUNTIF($A$2:$A$9,$A2),
+      INDEX('Draft Picks'!$D:$D,SMALL(IF(('Draft Picks'!$C:$C=B$1)*('Draft Picks'!$E:$E=$A2),ROW('Draft Picks'!$D:$D)),COUNTIF(B$2:B2,$A2)+1)),
+      ""),
+    IF($A2="RB",
+      IF(COUNTIF(B$2:B2,$A2)<COUNTIF($A$2:$A$9,$A2),
+        INDEX('Draft Picks'!$D:$D,SMALL(IF(('Draft Picks'!$C:$C=B$1)*('Draft Picks'!$E:$E=$A2),ROW('Draft Picks'!$D:$D)),COUNTIF(B$2:B2,$A2)+1)),
+        ""),
+      IF($A2="WR",
+        IF(COUNTIF(B$2:B2,$A2)<COUNTIF($A$2:$A$9,$A2),
+          INDEX('Draft Picks'!$D:$D,SMALL(IF(('Draft Picks'!$C:$C=B$1)*('Draft Picks'!$E:$E=$A2),ROW('Draft Picks'!$D:$D)),COUNTIF(B$2:B2,$A2)+1)),
+          ""),
+        IF($A2="TE",
+          IF(COUNTIF(B$2:B2,$A2)<COUNTIF($A$2:$A$9,$A2),
+            INDEX('Draft Picks'!$D:$D,SMALL(IF(('Draft Picks'!$C:$C=B$1)*('Draft Picks'!$E:$E=$A2),ROW('Draft Picks'!$D:$D)),COUNTIF(B$2:B2,$A2)+1)),
+            ""),
+          IF($A2="FLEX",
+            IF(COUNTIFS('Draft Picks'!$C:$C,B$1,'Draft Picks'!$E:$E,"RB")>COUNTIF($A$2:$A$9,"RB"),
+              INDEX('Draft Picks'!$D:$D,SMALL(IF(('Draft Picks'!$C:$C=B$1)*('Draft Picks'!$E:$E="RB"),ROW('Draft Picks'!$D:$D)),COUNTIF($A$2:$A$9,"RB")+1)),
+              IF(COUNTIFS('Draft Picks'!$C:$C,B$1,'Draft Picks'!$E:$E,"WR")>COUNTIF($A$2:$A$9,"WR"),
+                INDEX('Draft Picks'!$D:$D,SMALL(IF(('Draft Picks'!$C:$C=B$1)*('Draft Picks'!$E:$E="WR"),ROW('Draft Picks'!$D:$D)),COUNTIF($A$2:$A$9,"WR")+1)),
+                IF(COUNTIFS('Draft Picks'!$C:$C,B$1,'Draft Picks'!$E:$E,"TE")>COUNTIF($A$2:$A$9,"TE"),
+                  INDEX('Draft Picks'!$D:$D,SMALL(IF(('Draft Picks'!$C:$C=B$1)*('Draft Picks'!$E:$E="TE"),ROW('Draft Picks'!$D:$D)),COUNTIF($A$2:$A$9,"TE")+1)),
+                  ""))),
+            IF($A2="SUPERFLEX",
+              IF(COUNTIFS('Draft Picks'!$C:$C,B$1,'Draft Picks'!$E:$E,"QB")>COUNTIF($A$2:$A$9,"QB"),
+                INDEX('Draft Picks'!$D:$D,SMALL(IF(('Draft Picks'!$C:$C=B$1)*('Draft Picks'!$E:$E="QB"),ROW('Draft Picks'!$D:$D)),COUNTIF($A$2:$A$9,"QB")+1)),
+                ""),
+              ""))))),
+  INDEX('Draft Picks'!$D:$D,SMALL(IF(('Draft Picks'!$C:$C=B$1)*(COUNTIF(B$2:B$9,'Draft Picks'!$D:$D)=0),ROW('Draft Picks'!$D:$D)),ROW()-10)))</code>
+        </div>
+
+        <div class="formula-section">
+            <div class="formula-title">Simplified Bench Formula (for rows 11+)</div>
+            <code>=IFERROR(INDEX('Draft Picks'!$D:$D,SMALL(IF(('Draft Picks'!$C:$C=B$1)*(COUNTIF(B$2:B$10,'Draft Picks'!$D:$D)=0),ROW('Draft Picks'!$D:$D)),ROW()-10)),"")</code>
+        </div>
+
+        <h2>Position Counter Formulas</h2>
+
+        <div class="formula-section">
+            <div class="formula-title">Count by Position (create a summary section)</div>
+            <p>QB Count for Team 1:</p>
+            <code>=COUNTIFS('Draft Picks'!$C:$C,"Team 1",'Draft Picks'!$E:$E,"QB")</code>
+            <p>RB Count for Team 1:</p>
+            <code>=COUNTIFS('Draft Picks'!$C:$C,"Team 1",'Draft Picks'!$E:$E,"RB")</code>
+        </div>
+
+        <h2>Setup Instructions</h2>
+        <ol>
+            <li><strong>Create Sheet1 (Main Draft Sheet):</strong>
+                <ul>
+                    <li>Put "Position" in A1</li>
+                    <li>Enter team names in B1, C1, D1, etc.</li>
+                    <li>List positions in column A starting from A2 (QB, RB, RB, WR, WR, TE, FLEX, SUPERFLEX, BN1, BN2...)</li>
+                </ul>
+            </li>
+            <li><strong>Create Sheet2 (Draft Picks):</strong>
+                <ul>
+                    <li>Headers: Pick # | Round | Team | Player | Position</li>
+                    <li>Enter picks as they happen during the draft</li>
+                </ul>
+            </li>
+            <li><strong>Apply the Main Formula:</strong>
+                <ul>
+                    <li>Copy the main roster formula to B2</li>
+                    <li>Drag down to fill all roster spots</li>
+                    <li>Copy across to all team columns</li>
+                </ul>
+            </li>
+        </ol>
+
+        <h2>How It Works</h2>
+        <ul>
+            <li><strong>Natural Position First:</strong> Players fill their drafted position spots first</li>
+            <li><strong>Superflex Priority:</strong> Extra QBs go to superflex before bench</li>
+            <li><strong>Flex Priority:</strong> Extra RB/WR/TE go to flex before bench</li>
+            <li><strong>Bench Filling:</strong> Remaining players fill bench spots in draft order</li>
+            <li><strong>Real-time Updates:</strong> As you enter picks in the Draft Picks sheet, rosters update automatically</li>
+        </ul>
+
+        <div class="instructions" style="background-color: #fff3cd; margin-top: 30px;">
+            <h3>Pro Tips:</h3>
+            <ul>
+                <li>Use conditional formatting to highlight filled positions</li>
+                <li>Add a "Position Needs" section that shows which positions each team still needs</li>
+                <li>Create a "Best Available" sheet that filters out already drafted players</li>
+                <li>Use data validation on the Draft Picks sheet to ensure position accuracy</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
