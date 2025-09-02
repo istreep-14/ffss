@@ -34,6 +34,29 @@ function setupDraftBoard() {
 }
 
 /**
+ * Calculates roster size from Input sheet based on starter positions
+ */
+function calculateRosterSizeFromInput() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const inputSheet = ss.getSheetByName('Input');
+  
+  if (!inputSheet) {
+    throw new Error('Input sheet not found! Please run "Setup Input Sheet" first.');
+  }
+  
+  // Get the starter counts from B3:B10 (rows 3-10, column 2)
+  let totalStarters = 0;
+  for (let row = 3; row <= 10; row++) {
+    const starterCount = inputSheet.getRange(row, 2).getValue();
+    if (starterCount && !isNaN(starterCount)) {
+      totalStarters += Number(starterCount);
+    }
+  }
+  
+  return totalStarters;
+}
+
+/**
  * Analyzes the draft board to determine team count and roster size
  */
 function analyzeDraftBoard(draftSheet) {
@@ -55,26 +78,33 @@ function analyzeDraftBoard(draftSheet) {
   
   const teamCount = lastCol - 1; // Subtract 1 because we started from column B (2)
   
-  // Find the last row with draft data
-  let lastRow = 2;
-  const maxRow = draftSheet.getMaxRows();
-  
-  // Check every 3rd row starting from row 2 (rounds are in rows 2, 5, 8, 11, etc.)
-  for (let row = 2; row <= maxRow; row += 3) {
-    let hasData = false;
-    for (let col = 2; col <= lastCol; col++) {
-      if (draftSheet.getRange(row, col).getValue() !== '') {
-        hasData = true;
+  // Get roster size from Input sheet
+  let rosterSize;
+  try {
+    rosterSize = calculateRosterSizeFromInput();
+  } catch (error) {
+    // Fall back to analyzing draft board if Input sheet is not available
+    let lastRow = 2;
+    const maxRow = draftSheet.getMaxRows();
+    
+    // Check every 3rd row starting from row 2 (rounds are in rows 2, 5, 8, 11, etc.)
+    for (let row = 2; row <= maxRow; row += 3) {
+      let hasData = false;
+      for (let col = 2; col <= lastCol; col++) {
+        if (draftSheet.getRange(row, col).getValue() !== '') {
+          hasData = true;
+          break;
+        }
+      }
+      if (!hasData) {
         break;
       }
+      lastRow = row;
     }
-    if (!hasData) {
-      break;
-    }
-    lastRow = row;
+    
+    rosterSize = Math.floor((lastRow - 2) / 3) + 1;
   }
   
-  const rosterSize = Math.floor((lastRow - 2) / 3) + 1;
   const totalPlayers = teamCount * rosterSize;
   
   return { teamCount, rosterSize, totalPlayers };
@@ -256,18 +286,7 @@ function columnToLetter(column) {
   return letter;
 }
 
-/**
- * Menu function to add the setup option to the spreadsheet
- */
-function onOpen() {
-  const ui = SpreadsheetApp.getUi();
-  ui.createMenu('Draft Board')
-    .addItem('Setup Draft Board', 'setupDraftBoard')
-    .addItem('Refresh Rosters', 'refreshRosters')
-    .addSeparator()
-    .addItem('Help', 'showHelp')
-    .addToUi();
-}
+// Note: onOpen function has been moved to code.gs to avoid conflicts
 
 /**
  * Refreshes the roster sheet formulas
@@ -295,25 +314,48 @@ function showHelp() {
   const helpText = `
 Draft Board Help:
 
-1. Set up your draft board in the 'draft' sheet:
+1. IMPORTANT: The number of rounds is now determined by the Input sheet (B3:B10).
+   - The total starter positions in the Input sheet determines how many rounds to draft
+   - Make sure to set up your league settings in the Input sheet first!
+
+2. Set up your draft board in the 'draft' sheet:
    - Enter player names in columns B through Q (or less for fewer teams)
    - Use rows 2, 5, 8, 11, etc. for rounds (with helper text in between)
 
-2. Run 'Setup Draft Board' from the Draft Board menu to:
+3. Run 'Setup Draft Board' from the Draft Board menu to:
    - Create 'Team Rosters' sheet with automatic player population
    - Create 'Team Config' sheet for team names and control settings
+   - The number of rounds will be based on your Input sheet settings
 
-3. In 'Team Config' sheet:
+4. In 'Team Config' sheet:
    - Enter custom team names
    - Check boxes for teams you control
 
-4. The 'Team Rosters' sheet will automatically:
+5. The 'Team Rosters' sheet will automatically:
    - Show pick order for snake draft
    - Display team names from config
    - Pull player names from the draft board
 
-5. Use 'Refresh Rosters' if you need to update formulas after changes.
+6. Use 'Test Roster Size Calculation' to verify the number of rounds.
+7. Use 'Refresh Rosters' if you need to update formulas after changes.
   `;
   
   SpreadsheetApp.getUi().alert('Draft Board Help', helpText, SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * Test function to verify roster size calculation from Input sheet
+ */
+function testRosterSizeCalculation() {
+  try {
+    const rosterSize = calculateRosterSizeFromInput();
+    SpreadsheetApp.getUi().alert(
+      'Roster Size Test',
+      `Calculated roster size from Input sheet (B3:B10): ${rosterSize} rounds\n\n` +
+      'This is based on the total number of starter positions.',
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+  } catch (error) {
+    SpreadsheetApp.getUi().alert('Error', error.toString(), SpreadsheetApp.getUi().ButtonSet.OK);
+  }
 }
