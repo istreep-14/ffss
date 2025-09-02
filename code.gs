@@ -6,9 +6,20 @@
 
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
+  
+  // Fantasy VBD menu
   ui.createMenu('Fantasy VBD')
     .addItem('Setup Input Sheet', 'setupInputSheet')
     .addItem('Calculate VBD', 'calculateVBD')
+    .addToUi();
+    
+  // Draft Board menu
+  ui.createMenu('Draft Board')
+    .addItem('Setup Draft Board', 'setupDraftBoard')
+    .addItem('Refresh Rosters', 'refreshRosters')
+    .addSeparator()
+    .addItem('Test Roster Size Calculation', 'testRosterSizeCalculation')
+    .addItem('Help', 'showHelp')
     .addToUi();
 }
 
@@ -45,14 +56,14 @@ function setupInputSheet() {
   
   inputSheet.getRange(1, 1, headers.length, 3).setValues(headers);
   
-  // Format the sheet
-  inputSheet.getRange('A1:C1').merge().setFontWeight('bold').setHorizontalAlignment('center');
+  // Minimal formatting - just headers
   inputSheet.getRange('A2:C2').setFontWeight('bold');
-  inputSheet.getRange('A12:C12').merge().setFontWeight('bold').setHorizontalAlignment('center');
   inputSheet.getRange('A13:B13').setFontWeight('bold');
   
-  // Auto-resize columns
-  inputSheet.autoResizeColumns(1, 3);
+  // Set fixed column widths instead of auto-resize
+  inputSheet.setColumnWidth(1, 150); // Position column
+  inputSheet.setColumnWidth(2, 80);  // Starters column
+  inputSheet.setColumnWidth(3, 180); // Bench column
   
   SpreadsheetApp.getUi().alert('Input sheet has been set up! You can use decimals for bench (e.g., 2.5 RBs). Adjust settings as needed, then run "Calculate VBD".');
 }
@@ -452,9 +463,6 @@ function displayResults(inputSheet, calculations, inputData) {
   inputSheet.getRange(startRow + 11, 1, 1, maxCols).setFontWeight('bold');
   inputSheet.getRange(startRow + 14, 1, 1, maxCols).setFontWeight('bold');
   inputSheet.getRange(startRow + 21, 1, 1, maxCols).setFontWeight('bold');
-  
-  // Auto-resize columns
-  inputSheet.autoResizeColumns(1, maxCols);
 }
 
 /**
